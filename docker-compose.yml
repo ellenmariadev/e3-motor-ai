@@ -17,5 +17,32 @@ services:
       timeout: 3s
       retries: 20
 
+  app:
+    build: .
+    container_name: crm-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+
+      DATABASE_URL: postgresql://postgres:crm@postgres:5432/crm
+
+      BURST_WINDOW_MS: "8000"
+      BURST_MAX_WAIT_MS: "20000"
+      WORKER_POLL_INTERVAL_MS: "250"
+      WORKER_LEASE_MS: "30000"
+      MAX_TOOL_ITERATIONS: "6"
+
+      LLM_PROVIDER: "mock"
+      LLM_BASE_URL: ""
+      LLM_API_KEY: ""
+      LLM_MODEL: ""
+      LLM_TIMEOUT_MS: "30000"
+    ports:
+      - "3000:3000"
+
 volumes:
   pgdata:

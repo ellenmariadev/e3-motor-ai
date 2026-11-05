@@ -22,7 +22,8 @@
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "prepare": "husky",
     "migrate": "ts-node -r dotenv/config src/database/script.ts",
-    "migrate:prod": "node dist/database/migrator.js"
+    "migrate:prod": "node dist/database/script.js",
+    "eval": "ts-node evaluation/run.ts > evaluation/last-run.json && ts-node evaluation/report.ts"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
