@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { LlmProvider, LlmResponse, LlmToolCall } from "./llm.interface.js";
+import type { LlmProvider, LlmResponse, LlmToolCall } from "./llm.interface.js";
 
 export type MockStep =
   { type: "tool"; toolCalls: LlmToolCall[] } | { type: "text"; text: string };
@@ -7,7 +7,6 @@ export type MockStep =
 @Injectable()
 export class MockProvider implements LlmProvider {
   private queue: MockStep[] = [];
-  private readonly defaultText = "Ok, entendi.";
 
   enqueue(...steps: MockStep[]) {
     this.queue.push(...steps);
@@ -21,12 +20,12 @@ export class MockProvider implements LlmProvider {
     const step = this.queue.shift();
     if (!step) {
       return {
-        text: this.defaultText,
+        text: "Ok, entendi.",
         usage: {
           provider: "mock",
           model: "mock-1",
-          inputTokens: 0,
-          outputTokens: 0,
+          inputTokens: 5,
+          outputTokens: 5,
         },
       };
     }
