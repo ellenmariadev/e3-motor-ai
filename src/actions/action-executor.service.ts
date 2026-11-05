@@ -6,6 +6,11 @@ import {
   EvidenceValidatorService,
   PendingMessage,
 } from "../leads/evidence-validator.service.js";
+import {
+  hasLiteralValue,
+  OWNERSHIP_PATTERN,
+  RENTAL_PATTERN,
+} from "../leads/evidence-rules.js";
 import type { LlmTool } from "../llm/llm.interface.js";
 
 interface ExecuteInput {
@@ -40,9 +45,13 @@ export class ActionExecutorService {
             campo: { type: "string" },
             valor: { type: "string" },
             trecho: { type: "string" },
-            message_id: { type: "string" },
+            message_id: {
+              type: "string",
+              description:
+                "ID literal da mensagem do lead; pode ser omitido quando o trecho identificar uma única mensagem.",
+            },
           },
-          required: ["campo", "valor", "trecho", "message_id"],
+          required: ["campo", "valor", "trecho"],
         },
       },
       {
@@ -170,13 +179,29 @@ export class ActionExecutorService {
   }
 
   private async atualizarFicha(input: ExecuteInput) {
-    const { campo, valor, trecho, message_id } = input.argumentos;
+    const { campo, valor, trecho } = input.argumentos;
+    if (["nome", "cidade"].includes(campo) && !hasLiteralValue(valor, trecho)) {
+      throw new BadRequestException(
+        `${campo} exige que o valor apareça literalmente no trecho informado`,
+      );
+    }
+    if (
+      campo === "tipo_imovel" &&
+      ((valor === "proprio" && !OWNERSHIP_PATTERN.test(trecho)) ||
+        (valor === "alugado" && !RENTAL_PATTERN.test(trecho)))
+    ) {
+      throw new BadRequestException(
+        "tipo_imovel exige evidência explícita no trecho informado",
+      );
+    }
+    const messageId =
+      input.argumentos.message_id ?? this.findEvidenceMessageId(input, trecho);
     const ficha = await this.leads.get(input.conversationId);
     this.evidence.validate({
       campo,
       valor,
       trecho,
-      messageId: message_id,
+      messageId,
       messages: input.pendingMessages,
       fichaAtual: ficha,
     });
@@ -187,10 +212,23 @@ export class ActionExecutorService {
       {
         valor,
         trecho,
-        message_id,
+        message_id: messageId,
       },
     );
     return { ok: true, campo, valor };
+  }
+
+  private findEvidenceMessageId(input: ExecuteInput, trecho: string): string {
+    const matches = input.pendingMessages.filter(
+      (message) =>
+        message.autor === "lead" && message.texto.includes(trecho.trim()),
+    );
+    if (matches.length !== 1) {
+      throw new BadRequestException(
+        "message_id é obrigatório quando o trecho não identifica uma única mensagem do lead",
+      );
+    }
+    return matches[0].message_id;
   }
 
   private async adicionarTag(input: ExecuteInput) {

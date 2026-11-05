@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException } from "@nestjs/common";
+import type { ConversationMessage } from "../conversations/message.types.js";
 
 const CAMPOS_PERMITIDOS = new Set([
   "nome",
@@ -10,11 +11,7 @@ const CAMPOS_PERMITIDOS = new Set([
   "cliente_antigo",
 ]);
 
-export interface PendingMessage {
-  id: string;
-  autor: "lead" | "humano" | "ia";
-  texto: string;
-}
+export type PendingMessage = ConversationMessage;
 
 @Injectable()
 export class EvidenceValidatorService {
@@ -32,7 +29,9 @@ export class EvidenceValidatorService {
       throw new BadRequestException(`campo não permitido: ${campo}`);
     }
 
-    const msg = messages.find((m) => m.id === messageId);
+    const msg = messages.find(
+      (m) => m.message_id === messageId || m.id === messageId,
+    );
     if (!msg) {
       throw new BadRequestException(
         `message_id ${messageId} não pertence ao lote`,

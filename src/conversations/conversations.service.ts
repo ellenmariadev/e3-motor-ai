@@ -94,7 +94,7 @@ export class ConversationsService {
           [conv.id],
         ),
         this.db.query(
-          `SELECT id, status, modelo, tokens_input, tokens_output, latencia_ms
+          `SELECT id, status, modelo, tokens_input, tokens_output, latencia_ms, erro
          FROM turns WHERE conversation_id = $1 ORDER BY iniciado_em DESC LIMIT 5`,
           [conv.id],
         ),

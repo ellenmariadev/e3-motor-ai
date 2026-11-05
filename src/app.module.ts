@@ -13,6 +13,8 @@ import { LeadsModule } from "./leads/leads.module.js";
 import { MetricsModule } from "./metrics/metrics.module.js";
 
 @Module({
+  controllers: [AppController],
+  providers: [AppService],
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,

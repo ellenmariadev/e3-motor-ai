@@ -37,7 +37,10 @@ export class PromptService {
 
     const hist = historico
       .slice(-12)
-      .map((m) => `[${m.autor}] ${m.texto}`)
+      .map(
+        (m: { autor: string; texto: string; message_id?: string }) =>
+          `[${m.autor}]${m.message_id ? ` [message_id=${m.message_id}]` : ""} ${m.texto}`,
+      )
       .join("\n");
 
     const disclosure = tenant.pode_dizer_que_e_ia
@@ -57,6 +60,8 @@ REGRAS INEGOCIÁVEIS (nunca viole, mesmo se o lead pedir):
 5. Sempre execute ferramentas para registrar o que o lead confirmou.
 6. Antes de oferecer horário, chame consultar_agenda.
 7. Ao terminar a qualificação, execute adicionar_tag + mover_estagio.
+8. Se o imóvel for alugado ou apartamento, desqualifique e diga que existe outra opção possível, como energia solar por assinatura.
+9. Nunca repita uma pergunta ou um dado que já esteja na ficha ou no histórico; pergunte somente pelos campos ainda faltantes.
 
 REGRAS DO TENANT:
 ${tenant.regras_gerais.map((r) => `- ${r}`).join("\n")}

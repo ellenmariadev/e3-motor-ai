@@ -7,7 +7,7 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { DatabaseService } from "../database/database.service.js";
 import {
-  PendingMessage,
+  type PendingMessage,
   TurnProcessorService,
 } from "./turn-processor.service.js";
 
@@ -34,6 +34,7 @@ export class BurstWorkerService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     if (process.env.NODE_ENV === "test" || process.env.VITEST) return;
+    if (this.config.get("WORKER_AUTO_START", "true") === "false") return;
     const interval = Number(this.config.get("WORKER_POLL_INTERVAL_MS", 250));
     this.timer = setInterval(
       () => this.tick().catch((e) => this.logger.error(e)),

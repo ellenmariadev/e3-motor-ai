@@ -2,14 +2,9 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { DatabaseService } from "../database/database.service.js";
 import { AgentService } from "../agent/agent.service.js";
+import type { ConversationMessage } from "../conversations/message.types.js";
 
-export interface PendingMessage {
-  id: string;
-  autor: "lead" | "humano" | "ia";
-  texto: string;
-  timestamp: Date;
-  message_id: string;
-}
+export type PendingMessage = ConversationMessage;
 
 export interface ClaimedConversation {
   id: string;
@@ -52,8 +47,6 @@ export class TurnProcessorService {
         messages,
       });
 
-      await this.ensureClosed(turnId, claim.id);
-
       await this.finalize(
         claim,
         turnId,
@@ -62,6 +55,7 @@ export class TurnProcessorService {
         Date.now() - startedAt,
         usage,
       );
+      await this.ensureClosed(turnId, claim.id);
     } catch (err) {
       this.logger.error(`turn ${turnId} failed`, err);
       await this.db.query(

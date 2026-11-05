@@ -1,5 +1,5 @@
 import { config } from "dotenv";
-import { beforeAll, afterAll } from "vitest";
+import { beforeAll } from "vitest";
 
 config();
 config({ path: ".env.test", override: true });
