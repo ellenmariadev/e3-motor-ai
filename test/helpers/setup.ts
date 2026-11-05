@@ -7,7 +7,7 @@ config({ path: ".env.test", override: true });
 process.env.NODE_ENV = "test";
 process.env.LLM_PROVIDER = "mock";
 
-import { resetSchema, migrate } from "./helpers/db.js";
+import { resetSchema, migrate } from "./db.js";
 
 beforeAll(async () => {
   await resetSchema();

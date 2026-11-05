@@ -33,7 +33,7 @@ export class BurstWorkerService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
-    if (process.env.NODE_ENV === "test") return;
+    if (process.env.NODE_ENV === "test" || process.env.VITEST) return;
     const interval = Number(this.config.get("WORKER_POLL_INTERVAL_MS", 250));
     this.timer = setInterval(
       () => this.tick().catch((e) => this.logger.error(e)),
