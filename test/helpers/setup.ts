@@ -1,0 +1,15 @@
+import { config } from "dotenv";
+import { beforeAll, afterAll } from "vitest";
+
+config();
+config({ path: ".env.test", override: true });
+
+process.env.NODE_ENV = "test";
+process.env.LLM_PROVIDER = "mock";
+
+import { resetSchema, migrate } from "./helpers/db.js";
+
+beforeAll(async () => {
+  await resetSchema();
+  await migrate();
+});
