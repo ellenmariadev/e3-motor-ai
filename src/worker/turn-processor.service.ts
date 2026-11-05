@@ -1,4 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { DatabaseService } from "../database/database.service.js";
 import { AgentService } from "../agent/agent.service.js";
 
@@ -26,6 +27,7 @@ export class TurnProcessorService {
   constructor(
     private readonly db: DatabaseService,
     private readonly agent: AgentService,
+    private readonly config: ConfigService,
   ) {}
 
   async process(claim: ClaimedConversation, messages: PendingMessage[]) {
@@ -40,7 +42,7 @@ export class TurnProcessorService {
     );
 
     try {
-      await this.agent.runTurn({
+      const { usage } = await this.agent.runTurn({
         turnId,
         tenantId: claim.tenant_id,
         conversationId: claim.id,
@@ -58,6 +60,7 @@ export class TurnProcessorService {
         messageIds,
         "concluido",
         Date.now() - startedAt,
+        usage,
       );
     } catch (err) {
       this.logger.error(`turn ${turnId} failed`, err);
@@ -119,6 +122,12 @@ export class TurnProcessorService {
     messageIds: string[],
     status: "concluido",
     latencia: number,
+    usage: {
+      provider: string;
+      model: string;
+      inputTokens: number;
+      outputTokens: number;
+    },
   ) {
     await this.db.transaction(async (client) => {
       const { rows } = await client.query(
@@ -157,9 +166,31 @@ export class TurnProcessorService {
       }
 
       await client.query(
-        `UPDATE turns SET status = $2, latencia_ms = $3, finalizado_em = now() WHERE id = $1`,
-        [turnId, status, latencia],
+        `UPDATE turns
+         SET status = $2, provedor = $3, modelo = $4,
+             tokens_input = $5, tokens_output = $6,
+             custo = $7, latencia_ms = $8, finalizado_em = now()
+         WHERE id = $1`,
+        [
+          turnId,
+          status,
+          usage.provider,
+          usage.model,
+          usage.inputTokens,
+          usage.outputTokens,
+          this.estimateCost(usage),
+          latencia,
+        ],
       );
     });
+  }
+
+  private estimateCost(usage: { inputTokens: number; outputTokens: number }) {
+    const inputRate = Number(this.config.get("LLM_INPUT_COST_PER_1K", 0));
+    const outputRate = Number(this.config.get("LLM_OUTPUT_COST_PER_1K", 0));
+    return (
+      (usage.inputTokens / 1000) * inputRate +
+      (usage.outputTokens / 1000) * outputRate
+    );
   }
 }

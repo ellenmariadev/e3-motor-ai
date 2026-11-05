@@ -10,6 +10,7 @@ import { WorkerModule } from "./worker/worker.module.js";
 import { ActionsModule } from "./actions/actions.module.js";
 import { LlmModule } from "./llm/llm.module.js";
 import { LeadsModule } from "./leads/leads.module.js";
+import { MetricsModule } from "./metrics/metrics.module.js";
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { LeadsModule } from "./leads/leads.module.js";
     ActionsModule,
     LlmModule,
     LeadsModule,
+    MetricsModule,
   ],
 })
 export class AppModule {}

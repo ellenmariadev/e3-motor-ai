@@ -7,6 +7,7 @@ import type { LlmProvider, LlmMessage, LlmTool } from "../llm/llm.interface.js";
 import { ActionExecutorService } from "../actions/action-executor.service.js";
 import { PendingMessage } from "../worker/turn-processor.service.js";
 import { ConfigService } from "@nestjs/config";
+import { QualificationService } from "../leads/qualification.service.js";
 
 interface TurnInput {
   turnId: string;
@@ -28,6 +29,7 @@ export class AgentService {
     private readonly leads: LeadsRepository,
     private readonly prompt: PromptService,
     private readonly executor: ActionExecutorService,
+    private readonly qualification: QualificationService,
     private readonly config: ConfigService,
     @Inject("LLM_PROVIDER") private readonly llm: LlmProvider,
   ) {}
@@ -65,9 +67,19 @@ export class AgentService {
 
     const maxIter = Number(this.config.get("MAX_TOOL_ITERATIONS", 6));
     let finalText: string | undefined;
+    const usage = {
+      provider: "unknown",
+      model: "unknown",
+      inputTokens: 0,
+      outputTokens: 0,
+    };
 
     for (let i = 0; i < maxIter; i++) {
       const resp = await this.llm.call({ messages, tools });
+      usage.provider = resp.usage.provider;
+      usage.model = resp.usage.model;
+      usage.inputTokens += resp.usage.inputTokens;
+      usage.outputTokens += resp.usage.outputTokens;
 
       if (resp.toolCalls && resp.toolCalls.length > 0) {
         messages.push({
@@ -100,9 +112,112 @@ export class AgentService {
       break;
     }
 
+    await this.ensureQualificationActions(input, tenant);
+
     if (finalText) {
       await this.persistAiMessage(input, finalText);
     }
+
+    return { usage };
+  }
+
+  private async ensureQualificationActions(
+    input: TurnInput,
+    tenant: ReturnType<TenantLoaderService["get"]>,
+  ) {
+    const ficha = await this.leads.get(input.conversationId);
+    const decision = this.qualification.evaluate(ficha, tenant);
+    const prefix = `backend-${input.turnId}`;
+
+    if (decision.resultado === "qualificado") {
+      await this.executeIfMissing(
+        input,
+        tenant,
+        "adicionar_tag",
+        `${prefix}-tag`,
+        {
+          tag: "qualificado",
+        },
+      );
+      await this.executeIfMissing(
+        input,
+        tenant,
+        "mover_estagio",
+        `${prefix}-stage`,
+        {
+          estagio: "Qualificado",
+        },
+      );
+    } else if (decision.resultado === "desqualificado") {
+      await this.executeIfMissing(
+        input,
+        tenant,
+        "adicionar_tag",
+        `${prefix}-tag`,
+        {
+          tag: "desqualificado",
+        },
+      );
+      await this.executeIfMissing(
+        input,
+        tenant,
+        "mover_estagio",
+        `${prefix}-stage`,
+        {
+          estagio: "Desqualificado",
+        },
+      );
+    } else if (decision.resultado === "transferir") {
+      await this.executeIfMissing(
+        input,
+        tenant,
+        "adicionar_tag",
+        `${prefix}-tag`,
+        {
+          tag:
+            decision.motivo === "cliente-antigo" ? "cliente-antigo" : "duvida",
+        },
+      );
+      await this.executeIfMissing(
+        input,
+        tenant,
+        "transferir_humano",
+        `${prefix}-transfer`,
+        {
+          motivo: decision.motivo ?? "necessita de atendimento humano",
+        },
+      );
+    } else {
+      await this.executeIfMissing(
+        input,
+        tenant,
+        "mover_estagio",
+        `${prefix}-stage`,
+        {
+          estagio: "Qualificacao",
+        },
+      );
+    }
+  }
+
+  private executeIfMissing(
+    input: TurnInput,
+    tenant: ReturnType<TenantLoaderService["get"]>,
+    ferramenta: string,
+    toolCallId: string,
+    argumentos: Record<string, string>,
+  ) {
+    return this.executor.execute({
+      turnId: input.turnId,
+      tenant,
+      conversationId: input.conversationId,
+      aiEpoch: input.aiEpoch,
+      simulacao: input.simulacao,
+      toolCallId,
+      ferramenta,
+      argumentos,
+      pendingMessages: input.messages,
+    });
   }
 
   private async persistAiMessage(input: TurnInput, texto: string) {

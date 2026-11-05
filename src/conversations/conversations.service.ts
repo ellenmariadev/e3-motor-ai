@@ -73,26 +73,32 @@ export class ConversationsService {
     const conv = await this.repo.find(tenantId, telefone);
     if (!conv) throw new ForbiddenException("conversa não encontrada");
 
-    const [messages, profile, appointments, turns] = await Promise.all([
-      this.db.query(
-        `SELECT id, autor, texto, timestamp, processada, message_id
+    const [messages, profile, appointments, notifications, turns] =
+      await Promise.all([
+        this.db.query(
+          `SELECT id, autor, texto, timestamp, processada, message_id
          FROM messages WHERE conversation_id = $1 ORDER BY timestamp ASC`,
-        [conv.id],
-      ),
-      this.db.query(
-        `SELECT ficha FROM lead_profiles WHERE conversation_id = $1`,
-        [conv.id],
-      ),
-      this.db.query(
-        `SELECT horario, status FROM appointments WHERE conversation_id = $1 ORDER BY horario`,
-        [conv.id],
-      ),
-      this.db.query(
-        `SELECT id, status, modelo, tokens_input, tokens_output, latencia_ms
+          [conv.id],
+        ),
+        this.db.query(
+          `SELECT ficha FROM lead_profiles WHERE conversation_id = $1`,
+          [conv.id],
+        ),
+        this.db.query(
+          `SELECT horario, status FROM appointments WHERE conversation_id = $1 ORDER BY horario`,
+          [conv.id],
+        ),
+        this.db.query(
+          `SELECT resumo, simulacao, created_at
+         FROM notifications WHERE conversation_id = $1 ORDER BY created_at`,
+          [conv.id],
+        ),
+        this.db.query(
+          `SELECT id, status, modelo, tokens_input, tokens_output, latencia_ms
          FROM turns WHERE conversation_id = $1 ORDER BY iniciado_em DESC LIMIT 5`,
-        [conv.id],
-      ),
-    ]);
+          [conv.id],
+        ),
+      ]);
 
     return {
       conversa: {
@@ -108,6 +114,7 @@ export class ConversationsService {
       ficha: profile.rows[0]?.ficha ?? {},
       mensagens: messages.rows,
       agendamentos: appointments.rows,
+      notificacoes: notifications.rows,
       ultimos_turnos: turns.rows,
     };
   }
