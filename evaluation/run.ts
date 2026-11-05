@@ -12,6 +12,8 @@ process.env.WORKER_AUTO_START = "false";
 process.env.LLM_MAX_RETRIES ??= "1";
 process.env.LLM_MAX_RETRY_DELAY_MS ??= "2000";
 process.env.LLM_MAX_OUTPUT_TOKENS ??= "768";
+process.env.LLM_FALLBACK_MODELS ??=
+  "qwen/qwen3.8-27b,openai/gpt-oss-20b,allam-2-7b";
 
 const conversationsUrl = new URL("./conversations.json", import.meta.url);
 const lastRunUrl = new URL("./last-run.json", import.meta.url);

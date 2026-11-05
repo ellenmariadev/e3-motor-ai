@@ -19,10 +19,19 @@ export class OpenAIProvider implements LlmProvider {
       tools: LlmTool[];
     },
     retryCount = 0,
+    modelIndex = 0,
   ): Promise<LlmResponse> {
     const baseUrl = this.config.getOrThrow<string>("LLM_BASE_URL");
     const apiKey = this.config.getOrThrow<string>("LLM_API_KEY");
-    const model = this.config.getOrThrow<string>("LLM_MODEL");
+    const primaryModel = this.config.getOrThrow<string>("LLM_MODEL");
+    const models = [
+      primaryModel,
+      ...String(this.config.get("LLM_FALLBACK_MODELS", ""))
+        .split(",")
+        .map((model) => model.trim())
+        .filter((model) => model && model !== primaryModel),
+    ];
+    const model = models[Math.min(modelIndex, models.length - 1)];
     const timeoutMs = Number(this.config.get("LLM_TIMEOUT_MS", 30000));
 
     const body: any = {
@@ -56,9 +65,7 @@ export class OpenAIProvider implements LlmProvider {
       }));
       body.tool_choice = "auto";
     }
-    const maxOutputTokens = Number(
-      this.config.get("LLM_MAX_OUTPUT_TOKENS", 0),
-    );
+    const maxOutputTokens = Number(this.config.get("LLM_MAX_OUTPUT_TOKENS", 0));
     if (Number.isFinite(maxOutputTokens) && maxOutputTokens > 0) {
       body.max_tokens = maxOutputTokens;
     }
@@ -79,6 +86,13 @@ export class OpenAIProvider implements LlmProvider {
       if (res.status === 429) {
         const responseBody = await res.text();
         if (this.isDailyTokenLimit(responseBody)) {
+          const nextIndex = modelIndex + 1;
+          if (nextIndex < models.length) {
+            this.logger.warn(
+              `Limite diário de tokens no modelo ${model}; tentando ${models[nextIndex]}...`,
+            );
+            return this.call(params, 0, nextIndex);
+          }
           throw new Error(
             `LLM 429 limite diário de tokens: ${this.rateLimitDetails(
               res,
@@ -112,7 +126,7 @@ export class OpenAIProvider implements LlmProvider {
         );
         clearTimeout(timer);
         await new Promise((r) => setTimeout(r, retryDelayMs));
-        return this.call(params, retryCount + 1);
+        return this.call(params, retryCount + 1, modelIndex);
       }
       if (!res.ok) {
         const responseBody = await res.text();
@@ -125,7 +139,7 @@ export class OpenAIProvider implements LlmProvider {
           this.logger.warn(
             "The model returned an invalid tool name; retrying once without tools so deterministic actions can finish the turn.",
           );
-          return this.call({ ...params, tools: [] });
+          return this.call({ ...params, tools: [] }, retryCount, modelIndex);
         }
         if (
           res.status === 400 &&
