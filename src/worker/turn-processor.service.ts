@@ -50,6 +50,8 @@ export class TurnProcessorService {
         messages,
       });
 
+      await this.ensureClosed(turnId, claim.id);
+
       await this.finalize(
         claim,
         turnId,
@@ -82,6 +84,35 @@ export class TurnProcessorService {
     }
   }
 
+  private async ensureClosed(turnId: string, conversationId: string) {
+    const { rows } = await this.db.query(
+      `SELECT estagio, tags FROM conversations WHERE id = $1`,
+      [conversationId],
+    );
+    const c = rows[0];
+    if (!c) return;
+
+    const temTagFinal = (c.tags as string[]).some((t) =>
+      ["qualificado", "desqualificado", "cliente-antigo"].includes(t),
+    );
+    if (!temTagFinal && c.estagio === "Novo") {
+      await this.db.query(
+        `INSERT INTO actions
+           (tenant_id, conversation_id, turn_id, ferramenta, argumentos, resultado, status, simulacao)
+         SELECT tenant_id, id, $2, 'mover_estagio',
+                '{"estagio":"Humano"}'::jsonb,
+                '{"ok":true,"motivo":"backend-forced"}'::jsonb,
+                'executada', simulacao
+         FROM conversations WHERE id = $1`,
+        [conversationId, turnId],
+      );
+      await this.db.query(
+        `UPDATE conversations SET estagio = 'Humano', status = 'humano' WHERE id = $1`,
+        [conversationId],
+      );
+    }
+  }
+
   private async finalize(
     claim: ClaimedConversation,
     turnId: string,
@@ -96,18 +127,17 @@ export class TurnProcessorService {
       );
       const current = rows[0];
 
-      // só marca mensagens como processadas se ainda somos donos do claim
       if (current.processing_token === claim.processing_token) {
         await client.query(
           `UPDATE messages SET processada = true, turn_id = $2 WHERE id = ANY($1::uuid[])`,
           [messageIds, turnId],
         );
 
-        // limpa debounce se não chegou nada novo
         const { rows: pending } = await client.query(
           `SELECT 1 FROM messages WHERE conversation_id = $1 AND processada = false LIMIT 1`,
           [claim.id],
         );
+
         if (pending.length === 0) {
           await client.query(
             `UPDATE conversations
